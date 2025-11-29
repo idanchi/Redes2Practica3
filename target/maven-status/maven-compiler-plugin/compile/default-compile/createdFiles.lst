@@ -1,0 +1,7 @@
+com\mycompany\chat\ChatCliente.class
+com\mycompany\chat\ChatServidor$ManejadorCliente.class
+com\mycompany\chat\ChatServidor.class
+com\mycompany\chat\FileTransferHandler.class
+com\mycompany\chat\ChatPrivado.class
+com\mycompany\chat\FileTransferHandler$ProgressListener.class
+com\mycompany\chat\FileTransferHandler$FileReceivedListener.class
