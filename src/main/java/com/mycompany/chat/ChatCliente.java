@@ -5,6 +5,8 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 public class ChatCliente extends JFrame {
 
@@ -14,6 +16,11 @@ public class ChatCliente extends JFrame {
     private BufferedReader in;
     private Socket socket;
     private String nombre;
+
+    // =====================================================
+    // NUEVO: Lista de usuarios conectados
+    // =====================================================
+    private ArrayList<String> usuariosConectados = new ArrayList<>();
 
     public ChatCliente() {
         setTitle("Chat Cliente");
@@ -77,6 +84,19 @@ public class ChatCliente extends JFrame {
                             nombre = JOptionPane.showInputDialog(this, "Ingresa tu nombre:");
                             if (nombre == null || nombre.trim().isEmpty()) nombre = "Usuario";
                             out.println(nombre);
+                            continue;
+                        }
+
+                        // ============================
+                        // NUEVO: LISTA DE USUARIOS
+                        // ============================
+                        if (msg.startsWith("USUARIOS ")) {
+                            String lista = msg.substring(9);
+                            usuariosConectados.clear();
+                            if (!lista.isEmpty()) {
+                                usuariosConectados.addAll(Arrays.asList(lista.split(",")));
+                                usuariosConectados.remove(nombre);
+                            }
                             continue;
                         }
 
@@ -155,9 +175,32 @@ public class ChatCliente extends JFrame {
     }
 
     // =========================================================
-    // ENVIAR ARCHIVO
+    // NUEVO ENVIAR ARCHIVO CON LISTA DE USUARIOS
     // =========================================================
     private void enviarArchivo() {
+
+        // Pedir lista actual al servidor
+        out.println("/usuarios");
+
+        try { Thread.sleep(200); } catch (Exception e) {}
+
+        if (usuariosConectados.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No hay usuarios disponibles.");
+            return;
+        }
+
+        String destino = (String) JOptionPane.showInputDialog(
+                this,
+                "Selecciona el usuario destino:",
+                "Enviar archivo",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                usuariosConectados.toArray(),
+                usuariosConectados.get(0)
+        );
+
+        if (destino == null) return;
+
         JFileChooser chooser = new JFileChooser();
         int r = chooser.showOpenDialog(this);
 
@@ -167,14 +210,9 @@ public class ChatCliente extends JFrame {
         String nombreArchivo = f.getName();
         long size = f.length();
 
-        String destino = JOptionPane.showInputDialog(this, "Enviar archivo a:");
-        if (destino == null || destino.trim().isEmpty()) return;
-
         try {
-            // Avisar al servidor
             out.println("/file " + destino + " " + nombreArchivo + " " + size);
 
-            // Enviar bytes
             FileInputStream fis = new FileInputStream(f);
             OutputStream os = socket.getOutputStream();
 
@@ -205,7 +243,6 @@ public class ChatCliente extends JFrame {
             String nombreArchivo = p[2];
             long size = Long.parseLong(p[3]);
 
-            // Elegir dónde guardar
             JFileChooser chooser = new JFileChooser();
             chooser.setSelectedFile(new File(nombreArchivo));
             int r = chooser.showSaveDialog(this);
@@ -213,7 +250,7 @@ public class ChatCliente extends JFrame {
             InputStream is = socket.getInputStream();
 
             if (r != JFileChooser.APPROVE_OPTION) {
-                // Consumir bytes igualmente
+
                 byte[] basura = new byte[4096];
                 long restante = size;
                 while (restante > 0) {
