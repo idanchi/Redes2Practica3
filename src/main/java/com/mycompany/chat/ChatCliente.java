@@ -17,9 +17,6 @@ public class ChatCliente extends JFrame {
     private Socket socket;
     private String nombre;
 
-    // =====================================================
-    // NUEVO: Lista de usuarios conectados
-    // =====================================================
     private ArrayList<String> usuariosConectados = new ArrayList<>();
 
     public ChatCliente() {
@@ -77,9 +74,7 @@ public class ChatCliente extends JFrame {
                     String msg;
                     while ((msg = in.readLine()) != null) {
 
-                        // ============================
-                        //  PROTOCOLO DE LOGIN
-                        // ============================
+                        // Solicitar nombre
                         if (msg.equals("INGRESA_TU_NOMBRE")) {
                             nombre = JOptionPane.showInputDialog(this, "Ingresa tu nombre:");
                             if (nombre == null || nombre.trim().isEmpty()) nombre = "Usuario";
@@ -87,12 +82,19 @@ public class ChatCliente extends JFrame {
                             continue;
                         }
 
-                        // ============================
-                        // NUEVO: LISTA DE USUARIOS
-                        // ============================
+                        // Nombre duplicado
+                        if (msg.equals("NOMBRE_INVALIDO")) {
+                            nombre = JOptionPane.showInputDialog(this, "Ese nombre ya existe.\nIngresa otro:");
+                            if (nombre == null || nombre.trim().isEmpty()) nombre = "Usuario";
+                            out.println(nombre);
+                            continue;
+                        }
+
+                        // Lista de usuarios
                         if (msg.startsWith("USUARIOS ")) {
                             String lista = msg.substring(9);
                             usuariosConectados.clear();
+
                             if (!lista.isEmpty()) {
                                 usuariosConectados.addAll(Arrays.asList(lista.split(",")));
                                 usuariosConectados.remove(nombre);
@@ -100,9 +102,7 @@ public class ChatCliente extends JFrame {
                             continue;
                         }
 
-                        // ============================
-                        //  LISTA DE SALAS
-                        // ============================
+                        // Salas
                         if (msg.startsWith("SALAS ")) {
                             String lista = msg.substring(6);
                             String[] salas = lista.isEmpty() ? new String[0] : lista.split(",");
@@ -120,17 +120,11 @@ public class ChatCliente extends JFrame {
                             continue;
                         }
 
-                        // ============================
-                        //  RECIBIR ARCHIVO
-                        // ============================
                         if (msg.startsWith("/incomingFile ")) {
                             recibirArchivo(msg);
                             continue;
                         }
 
-                        // ============================
-                        // MENSAJE NORMAL
-                        // ============================
                         append(msg);
                     }
                 } catch (Exception e) {
@@ -165,11 +159,9 @@ public class ChatCliente extends JFrame {
     }
 
     private void mensajePrivado() {
-
-        // Pedir lista actual al servidor
         out.println("/usuarios");
 
-        try { Thread.sleep(200); } catch (Exception e) {}
+        try { Thread.sleep(200); } catch (Exception ignored) {}
 
         if (usuariosConectados.isEmpty()) {
             JOptionPane.showMessageDialog(this, "No hay usuarios disponibles.");
@@ -178,14 +170,13 @@ public class ChatCliente extends JFrame {
 
         String destino = (String) JOptionPane.showInputDialog(
                 this,
-                "Selecciona el usuario destino:",
-                "Mensaje Privado",
+                "Selecciona usuario destino:",
+                "Privado",
                 JOptionPane.PLAIN_MESSAGE,
                 null,
                 usuariosConectados.toArray(),
                 usuariosConectados.get(0)
         );
-
         if (destino == null) return;
 
         String txt = JOptionPane.showInputDialog(this, "Mensaje:");
@@ -193,16 +184,11 @@ public class ChatCliente extends JFrame {
 
         out.println("/priv " + destino + " " + txt);
     }
-    
-    // =========================================================
-    // NUEVO ENVIAR ARCHIVO CON LISTA DE USUARIOS
-    // =========================================================
-    private void enviarArchivo() {
 
-        // Pedir lista actual al servidor
+    private void enviarArchivo() {
         out.println("/usuarios");
 
-        try { Thread.sleep(200); } catch (Exception e) {}
+        try { Thread.sleep(200); } catch (Exception ignored) {}
 
         if (usuariosConectados.isEmpty()) {
             JOptionPane.showMessageDialog(this, "No hay usuarios disponibles.");
@@ -218,12 +204,10 @@ public class ChatCliente extends JFrame {
                 usuariosConectados.toArray(),
                 usuariosConectados.get(0)
         );
-
         if (destino == null) return;
 
         JFileChooser chooser = new JFileChooser();
         int r = chooser.showOpenDialog(this);
-
         if (r != JFileChooser.APPROVE_OPTION) return;
 
         File f = chooser.getSelectedFile();
@@ -253,9 +237,6 @@ public class ChatCliente extends JFrame {
         }
     }
 
-    // =========================================================
-    // RECIBIR ARCHIVO
-    // =========================================================
     private void recibirArchivo(String msg) {
         try {
             String[] p = msg.split(" ");
@@ -270,14 +251,15 @@ public class ChatCliente extends JFrame {
             InputStream is = socket.getInputStream();
 
             if (r != JFileChooser.APPROVE_OPTION) {
-
                 byte[] basura = new byte[4096];
                 long restante = size;
+
                 while (restante > 0) {
                     int le = is.read(basura, 0, (int) Math.min(basura.length, restante));
                     if (le <= 0) break;
                     restante -= le;
                 }
+
                 append("Archivo rechazado: " + nombreArchivo);
                 return;
             }
