@@ -27,6 +27,7 @@ public class ChatCliente extends JFrame {
 
         JPanel panelAbajo = new JPanel(new BorderLayout());
         campoMensaje = new JTextField();
+        campoMensaje.addActionListener(e -> enviarMensaje());
         panelAbajo.add(campoMensaje, BorderLayout.CENTER);
 
         JButton btnEnviar = new JButton("Enviar");
