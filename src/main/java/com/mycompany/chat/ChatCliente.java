@@ -165,15 +165,35 @@ public class ChatCliente extends JFrame {
     }
 
     private void mensajePrivado() {
-        String dest = JOptionPane.showInputDialog(this, "Enviar a:");
-        if (dest == null || dest.trim().isEmpty()) return;
+
+        // Pedir lista actual al servidor
+        out.println("/usuarios");
+
+        try { Thread.sleep(200); } catch (Exception e) {}
+
+        if (usuariosConectados.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No hay usuarios disponibles.");
+            return;
+        }
+
+        String destino = (String) JOptionPane.showInputDialog(
+                this,
+                "Selecciona el usuario destino:",
+                "Mensaje Privado",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                usuariosConectados.toArray(),
+                usuariosConectados.get(0)
+        );
+
+        if (destino == null) return;
 
         String txt = JOptionPane.showInputDialog(this, "Mensaje:");
         if (txt == null || txt.trim().isEmpty()) return;
 
-        out.println("/priv " + dest + " " + txt);
+        out.println("/priv " + destino + " " + txt);
     }
-
+    
     // =========================================================
     // NUEVO ENVIAR ARCHIVO CON LISTA DE USUARIOS
     // =========================================================
