@@ -2,185 +2,247 @@ package com.mycompany.chat;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*;
 import java.io.*;
-import java.net.*;
-import java.util.*;
+import java.net.Socket;
 
 public class ChatCliente extends JFrame {
-    private JTextArea chatArea;
-    private JTextField inputField;
+
+    private JTextArea areaChat;
+    private JTextField campoMensaje;
     private PrintWriter out;
-    private String nombreUsuario;
-    private Map<String, ChatPrivado> chatsPrivados;
-    private String salaActiva = null;
+    private BufferedReader in;
+    private Socket socket;
+    private String nombre;
 
     public ChatCliente() {
-
-        nombreUsuario = JOptionPane.showInputDialog("Ingrese su nombre de usuario:");
-        if (nombreUsuario == null || nombreUsuario.trim().isEmpty()) {
-            System.exit(0);
-        }
-
-        setTitle("Chat - " + nombreUsuario);
+        setTitle("Chat Cliente");
         setSize(600, 500);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLocationRelativeTo(null);
+        setLayout(new BorderLayout());
 
-        chatArea = new JTextArea();
-        chatArea.setEditable(false);
+        areaChat = new JTextArea();
+        areaChat.setEditable(false);
+        add(new JScrollPane(areaChat), BorderLayout.CENTER);
 
-        inputField = new JTextField();
-        inputField.addActionListener(e -> enviarMensaje());
+        JPanel panelAbajo = new JPanel(new BorderLayout());
+        campoMensaje = new JTextField();
+        panelAbajo.add(campoMensaje, BorderLayout.CENTER);
 
-        chatsPrivados = new HashMap<>();
+        JButton btnEnviar = new JButton("Enviar");
+        btnEnviar.addActionListener(e -> enviarMensaje());
+        panelAbajo.add(btnEnviar, BorderLayout.EAST);
 
-        JButton btnListUsuarios = new JButton("Usuarios");
-        btnListUsuarios.addActionListener(e -> out.println("/usuarios"));
+        add(panelAbajo, BorderLayout.SOUTH);
+
+        JPanel panelBotones = new JPanel(new GridLayout(1, 4));
+
+        JButton btnSala = new JButton("Cambiar Sala");
+        btnSala.addActionListener(e -> cambiarSala());
+        panelBotones.add(btnSala);
+
+        JButton btnListarSalas = new JButton("Listar Salas");
+        btnListarSalas.addActionListener(e -> out.println("/salas"));
+        panelBotones.add(btnListarSalas);
 
         JButton btnPrivado = new JButton("Privado");
-        btnPrivado.addActionListener(e -> listarUsuariosParaPrivado());
+        btnPrivado.addActionListener(e -> mensajePrivado());
+        panelBotones.add(btnPrivado);
 
-        JButton btnCrear = new JButton("Crear sala");
-        btnCrear.addActionListener(e -> crearSala());
+        JButton btnArchivo = new JButton("Enviar Archivo");
+        btnArchivo.addActionListener(e -> enviarArchivo());
+        panelBotones.add(btnArchivo);
 
-        JButton btnListar = new JButton("Listar salas");
-        btnListar.addActionListener(e -> out.println("/salas"));
-
-        JButton btnIngresar = new JButton("Ingresar sala");
-        btnIngresar.addActionListener(e -> ingresarSalaManual());
-
-        JPanel botones = new JPanel();
-        botones.add(btnCrear);
-        botones.add(btnListar);
-        botones.add(btnIngresar);
-        botones.add(btnListUsuarios);
-        botones.add(btnPrivado);
-
-        add(new JScrollPane(chatArea), BorderLayout.CENTER);
-        add(inputField, BorderLayout.SOUTH);
-        add(botones, BorderLayout.NORTH);
+        add(panelBotones, BorderLayout.NORTH);
 
         conectar();
     }
 
-    private void crearSala() {
-        String sala = JOptionPane.showInputDialog("Nombre sala:");
-        if (sala != null && !sala.trim().isEmpty()) {
-            out.println("/crear " + sala);
-        }
-    }
-
-    private void ingresarSalaManual() {
-        String sala = JOptionPane.showInputDialog("Sala:");
-        if (sala != null && !sala.trim().isEmpty()) {
-            out.println("/ingresar " + sala);
-        }
-    }
-
-    private void listarUsuariosParaPrivado() {
-        out.println("/usuarios");
-    }
-
-    private void enviarMensaje() {
-        String msg = inputField.getText().trim();
-        if (msg.isEmpty()) return;
-
-        out.println(msg);
-        // REMOVED: append("Yo: " + msg);
-        inputField.setText("");
-    }
-
-    private void append(String t) {
-        chatArea.append(t + "\n");
-    }
-
     private void conectar() {
         try {
-            Socket socket = new Socket("localhost", 12345);
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            socket = new Socket("localhost", 5000);
             out = new PrintWriter(socket.getOutputStream(), true);
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            out.println(nombreUsuario);
-
-            new Thread(() -> {
+            Thread lector = new Thread(() -> {
                 try {
                     String msg;
                     while ((msg = in.readLine()) != null) {
-                        if (msg.equals("INGRESA_TU_NOMBRE")) continue;
 
+                        // ============================
+                        //  PROTOCOLO DE LOGIN
+                        // ============================
+                        if (msg.equals("INGRESA_TU_NOMBRE")) {
+                            nombre = JOptionPane.showInputDialog(this, "Ingresa tu nombre:");
+                            if (nombre == null || nombre.trim().isEmpty()) nombre = "Usuario";
+                            out.println(nombre);
+                            continue;
+                        }
+
+                        // ============================
+                        //  LISTA DE SALAS
+                        // ============================
                         if (msg.startsWith("SALAS ")) {
-                            mostrarSalas(msg.substring(6));
+                            String lista = msg.substring(6);
+                            String[] salas = lista.isEmpty() ? new String[0] : lista.split(",");
+
+                            if (salas.length == 0) {
+                                JOptionPane.showMessageDialog(this, "No hay salas disponibles.");
+                            } else {
+                                String sel = (String) JOptionPane.showInputDialog(
+                                        this, "Selecciona una sala:",
+                                        "Salas", JOptionPane.PLAIN_MESSAGE,
+                                        null, salas, salas[0]
+                                );
+                                if (sel != null) out.println("/sala " + sel);
+                            }
                             continue;
                         }
 
-                        if (msg.startsWith("USUARIOS ")) {
-                            mostrarUsuariosParaPrivado(msg.substring(9));
+                        // ============================
+                        //  RECIBIR ARCHIVO
+                        // ============================
+                        if (msg.startsWith("/incomingFile ")) {
+                            recibirArchivo(msg);
                             continue;
                         }
 
-                        if (msg.startsWith("[Privado]")) {
-                            procesarPrivado(msg);
-                            continue;
-                        }
-
+                        // ============================
+                        // MENSAJE NORMAL
+                        // ============================
                         append(msg);
                     }
                 } catch (Exception e) {
-                    append("Desconectado.");
+                    append("Desconectado del servidor.");
                 }
-            }).start();
+            });
+            lector.start();
 
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(null, "No se pudo conectar");
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "No se pudo conectar al servidor.");
             System.exit(0);
         }
     }
 
-    private void procesarPrivado(String msg) {
-        int ini = msg.indexOf(" ") + 1;
-        int sep = msg.indexOf(":", ini);
-        String remitente = msg.substring(ini, sep).trim();
-        String contenido = msg.substring(sep + 1).trim();
-
-        abrirChatPrivado(remitente);
-        chatsPrivados.get(remitente).recibirMensaje(remitente, contenido);
+    private void append(String msg) {
+        SwingUtilities.invokeLater(() -> areaChat.append(msg + "\n"));
     }
 
-    private void mostrarUsuariosParaPrivado(String lista) {
-        String[] users = lista.split(",");
-        if (users.length == 0) {
-            JOptionPane.showMessageDialog(this, "No hay usuarios");
-            return;
+    private void enviarMensaje() {
+        String msg = campoMensaje.getText().trim();
+        if (msg.isEmpty()) return;
+
+        out.println(msg);
+        campoMensaje.setText("");
+    }
+
+    private void cambiarSala() {
+        String sala = JOptionPane.showInputDialog(this, "Nombre de sala:");
+        if (sala != null && !sala.trim().isEmpty()) {
+            out.println("/sala " + sala.trim());
         }
-
-        String u = (String) JOptionPane.showInputDialog(
-                this, "Elige usuario:", "Chat privado",
-                JOptionPane.PLAIN_MESSAGE, null, users, users[0]);
-
-        if (u != null) abrirChatPrivado(u);
     }
 
-    private void mostrarSalas(String lista) {
-        String[] salas = lista.split(",");
-        if (salas.length == 0) {
-            JOptionPane.showMessageDialog(this, "No hay salas");
-            return;
+    private void mensajePrivado() {
+        String dest = JOptionPane.showInputDialog(this, "Enviar a:");
+        if (dest == null || dest.trim().isEmpty()) return;
+
+        String txt = JOptionPane.showInputDialog(this, "Mensaje:");
+        if (txt == null || txt.trim().isEmpty()) return;
+
+        out.println("/priv " + dest + " " + txt);
+    }
+
+    // =========================================================
+    // ENVIAR ARCHIVO
+    // =========================================================
+    private void enviarArchivo() {
+        JFileChooser chooser = new JFileChooser();
+        int r = chooser.showOpenDialog(this);
+
+        if (r != JFileChooser.APPROVE_OPTION) return;
+
+        File f = chooser.getSelectedFile();
+        String nombreArchivo = f.getName();
+        long size = f.length();
+
+        String destino = JOptionPane.showInputDialog(this, "Enviar archivo a:");
+        if (destino == null || destino.trim().isEmpty()) return;
+
+        try {
+            // Avisar al servidor
+            out.println("/file " + destino + " " + nombreArchivo + " " + size);
+
+            // Enviar bytes
+            FileInputStream fis = new FileInputStream(f);
+            OutputStream os = socket.getOutputStream();
+
+            byte[] buffer = new byte[4096];
+            int le;
+
+            while ((le = fis.read(buffer)) != -1) {
+                os.write(buffer, 0, le);
+            }
+
+            os.flush();
+            fis.close();
+
+            append("Archivo enviado a " + destino + ": " + nombreArchivo);
+
+        } catch (Exception ex) {
+            append("Error enviando archivo: " + ex.getMessage());
         }
-
-        String sala = (String) JOptionPane.showInputDialog(
-                this, "Elige sala:", "Salas",
-                JOptionPane.PLAIN_MESSAGE, null, salas, salas[0]);
-
-        if (sala != null) out.println("/ingresar " + sala);
     }
 
-    private void abrirChatPrivado(String usuario) {
-        if (!chatsPrivados.containsKey(usuario)) {
-            ChatPrivado cp = new ChatPrivado(nombreUsuario, usuario, out);
-            chatsPrivados.put(usuario, cp);
-            cp.setVisible(true);
-        } else {
-            chatsPrivados.get(usuario).setVisible(true);
+    // =========================================================
+    // RECIBIR ARCHIVO
+    // =========================================================
+    private void recibirArchivo(String msg) {
+        try {
+            String[] p = msg.split(" ");
+            String remitente = p[1];
+            String nombreArchivo = p[2];
+            long size = Long.parseLong(p[3]);
+
+            // Elegir dónde guardar
+            JFileChooser chooser = new JFileChooser();
+            chooser.setSelectedFile(new File(nombreArchivo));
+            int r = chooser.showSaveDialog(this);
+
+            InputStream is = socket.getInputStream();
+
+            if (r != JFileChooser.APPROVE_OPTION) {
+                // Consumir bytes igualmente
+                byte[] basura = new byte[4096];
+                long restante = size;
+                while (restante > 0) {
+                    int le = is.read(basura, 0, (int) Math.min(basura.length, restante));
+                    if (le <= 0) break;
+                    restante -= le;
+                }
+                append("Archivo rechazado: " + nombreArchivo);
+                return;
+            }
+
+            File f = chooser.getSelectedFile();
+            FileOutputStream fos = new FileOutputStream(f);
+
+            byte[] buffer = new byte[4096];
+            long restante = size;
+
+            while (restante > 0) {
+                int le = is.read(buffer, 0, (int) Math.min(buffer.length, restante));
+                if (le == -1) break;
+
+                fos.write(buffer, 0, le);
+                restante -= le;
+            }
+
+            fos.close();
+            append("Archivo recibido de " + remitente + ": " + f.getAbsolutePath());
+
+        } catch (Exception e) {
+            append("Error recibiendo archivo: " + e.getMessage());
         }
     }
 
