@@ -7,7 +7,8 @@ import java.util.concurrent.*;
 
 public class ChatServidor {
     private static final int PUERTO = 12345;
-    private static final Map<String, PrintWriter> usuarios = new ConcurrentHashMap<>();
+    // ConcurrentHashMap es importante para ser seguro en hilos
+    private static final Map<String, PrintWriter> usuarios = new ConcurrentHashMap<>(); 
 
     public static void main(String[] args) {
         System.out.println("Servidor de chat iniciado en el puerto " + PUERTO);
@@ -15,7 +16,8 @@ public class ChatServidor {
         try (ServerSocket serverSocket = new ServerSocket(PUERTO)) {
             while (true) {
                 Socket cliente = serverSocket.accept();
-                new Thread(new ManejadorCliente(cliente)).start();
+                // Cada conexión de cliente se maneja en un hilo separado
+                new Thread(new ManejadorCliente(cliente)).start(); 
             }
         } catch (IOException e) {
             System.err.println("Error en el servidor: " + e.getMessage());
@@ -47,6 +49,7 @@ public class ChatServidor {
                     return;
                 }
 
+                // Registrar usuario
                 usuarios.put(nombreUsuario, salida);
                 broadcast("Servidor", nombreUsuario + " se ha unido al chat.");
 
@@ -54,15 +57,19 @@ public class ChatServidor {
                 while ((mensaje = entrada.readLine()) != null) {
                     if (mensaje.startsWith("/privado ")) {
                         manejarMensajePrivado(mensaje);
+                    } else if (mensaje.equalsIgnoreCase("/usuarios")) { // <-- Comando Listar
+                        listarUsuarios(); // <-- Llamada al nuevo método
                     } else if (mensaje.startsWith("/ingresar")) {
-                        // No hacer nada, es un comando interno
+                        // Comando interno del cliente
                     } else {
                         broadcast(nombreUsuario, mensaje);
                     }
                 }
             } catch (IOException e) {
+                // Manejar desconexión
                 System.err.println("Error con usuario " + nombreUsuario + ": " + e.getMessage());
             } finally {
+                // Limpieza final
                 if (nombreUsuario != null) {
                     usuarios.remove(nombreUsuario);
                     broadcast("Servidor", nombreUsuario + " ha salido del chat.");
@@ -75,7 +82,19 @@ public class ChatServidor {
                 }
             }
         }
+        
+        // **NUEVO MÉTODO**
+        private void listarUsuarios() {
+            Set<String> listaNombres = usuarios.keySet();
+            
+            // Construir la cadena con los nombres separados por comas
+            String usuariosActivos = String.join(", ", listaNombres);
 
+            // Enviar la lista de vuelta SOLO al cliente que la solicitó
+            salida.println("Servidor: Usuarios activos (" + listaNombres.size() + "): " + usuariosActivos);
+        }
+        
+        // Método ya existente para mensaje privado
         private void manejarMensajePrivado(String mensaje) {
             try {
                 String[] partes = mensaje.split(" ", 3);
@@ -95,6 +114,7 @@ public class ChatServidor {
             }
         }
 
+        // Método ya existente para difundir
         private void broadcast(String remitente, String mensaje) {
             for (PrintWriter escritor : usuarios.values()) {
                 escritor.println(remitente + ": " + mensaje);
